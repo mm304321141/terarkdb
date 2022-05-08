@@ -73,7 +73,7 @@ Status DBImpl::SyncClosedLogs(JobContext* job_context) {
   for (auto it = logs_.begin();
        it != logs_.end() && it->number < current_log_number; ++it) {
     auto& log = *it;
-    assert(!log.getting_synced);
+    terarkdb_assert(!log.getting_synced);
     log.getting_synced = true;
     logs_to_sync.push_back(log.writer);
   }
@@ -126,7 +126,7 @@ Status DBImpl::FlushMemTableToOutputFile(
   }
   auto flushes = num_running_flushes() - 1;
   auto max_flushes = std::max(flushes, GetBGJobLimits().max_flushes - 1);
-  assert(flushes >= 0 && max_flushes >= 0);
+  terarkdb_assert(flushes >= 0 && max_flushes >= 0);
   double flush_load = -1. * flushes / max_flushes;
   FlushJob flush_job(
       dbname_, cfd, immutable_db_options_, mutable_cf_options,
@@ -231,8 +231,9 @@ Status DBImpl::FlushMemTableToOutputFile(
     WriteThread::Writer w;
     write_thread_.EnterUnbatched(&w, &mutex_);
     ProcessAtomicFlushGroup(&cfds, &flush_req_vec);
-    assert(cfds.size() == 1);
-    assert(flush_req_vec.size() == 1 && flush_req_vec.front().size() == 1);
+    terarkdb_assert(cfds.size() == 1);
+    terarkdb_assert(flush_req_vec.size() == 1 &&
+                    flush_req_vec.front().size() == 1);
     PrepareFlushReqVec(flush_req_vec, true /* force_flush */);
     SchedulePendingFlush(flush_req_vec, FlushReason::kInstallTimeout);
     write_thread_.ExitUnbatched(&w);
@@ -243,7 +244,7 @@ Status DBImpl::FlushMemTableToOutputFile(
 Status DBImpl::FlushMemTablesToOutputFiles(
     const autovector<BGFlushArg>& bg_flush_args, bool* made_progress,
     JobContext* job_context, LogBuffer* log_buffer) {
-  assert(!bg_flush_args.empty());
+  terarkdb_assert(!bg_flush_args.empty());
   if (bg_flush_args.front().cfd_->ioptions()->atomic_flush_group != nullptr) {
     auto pending_outputs_inserted_elem =
         CaptureCurrentFileNumberInPendingOutputs();
@@ -297,7 +298,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
 
 #ifndef NDEBUG
   for (const auto cfd : cfds) {
-    assert(cfd->imm()->NumNotFlushed() != 0);
+    terarkdb_assert(cfd->imm()->NumNotFlushed() != 0);
   }
 #endif /* !NDEBUG */
 
@@ -316,7 +317,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   all_mutable_cf_options.reserve(num_cfs);
   auto flushes = num_running_flushes() + num_cfs - 2;
   auto max_flushes = std::max(flushes, GetBGJobLimits().max_flushes - 1);
-  assert(flushes >= 0 && max_flushes >= 0);
+  terarkdb_assert(flushes >= 0 && max_flushes >= 0);
   double flush_load = -1. * flushes / max_flushes;
   for (int i = 0; i < num_cfs; ++i) {
     auto cfd = cfds[i];
@@ -352,7 +353,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   }
 
   Status s;
-  assert(num_cfs == static_cast<int>(jobs.size()));
+  terarkdb_assert(num_cfs == static_cast<int>(jobs.size()));
 
 #ifndef ROCKSDB_LITE
   for (int i = 0; i != num_cfs; ++i) {
@@ -480,8 +481,8 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   }
 
   if (s.ok() || s.IsShutdownInProgress()) {
-    assert(num_cfs ==
-           static_cast<int>(job_context->superversion_contexts.size()));
+    terarkdb_assert(
+        num_cfs == static_cast<int>(job_context->superversion_contexts.size()));
     for (int i = 0; i != num_cfs; ++i) {
       if (cfds[i]->IsDropped()) {
         continue;
@@ -620,7 +621,7 @@ void DBImpl::NotifyOnFlushCompleted(
   // release lock while notifying events
   mutex_.Unlock();
   {
-    assert(file_meta_vec.size() == prop_vec.size());
+    terarkdb_assert(file_meta_vec.size() == prop_vec.size());
     FlushJobInfo info;
     for (size_t i = 0; i < file_meta_vec.size(); ++i) {
       auto file_meta = &file_meta_vec[i];
@@ -832,7 +833,7 @@ Status DBImpl::CompactFiles(const CompactionOptions& compact_options,
   }
 
   auto cfd = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family)->cfd();
-  assert(cfd);
+  terarkdb_assert(cfd);
 
   Status s;
   JobContext job_context(0, true);
@@ -957,13 +958,13 @@ Status DBImpl::CompactFilesImpl(
   bg_compaction_scheduled_++;
 
   std::unique_ptr<Compaction> c;
-  assert(cfd->compaction_picker());
+  terarkdb_assert(cfd->compaction_picker());
   c.reset(cfd->compaction_picker()->CompactFiles(
       compact_options, input_files, output_level, version->storage_info(),
       *cfd->GetLatestMutableCFOptions(), output_path_id));
   // we already sanitized the set of input files and checked for conflicts
   // without releasing the lock, so we're guaranteed a compaction can be formed.
-  assert(c != nullptr);
+  terarkdb_assert(c != nullptr);
 
   c->SetInputVersion(version);
 
@@ -978,7 +979,7 @@ Status DBImpl::CompactFilesImpl(
   if (use_custom_gc_ && snapshot_checker == nullptr) {
     snapshot_checker = DisableGCSnapshotChecker::Instance();
   }
-  assert(is_snapshot_supported_ || snapshots_.empty());
+  terarkdb_assert(is_snapshot_supported_ || snapshots_.empty());
   CompactionJob compaction_job(
       job_context->job_id, c.get(), immutable_db_options_,
       env_options_for_compaction_, versions_.get(), &shutting_down_,
@@ -1092,8 +1093,8 @@ Status DBImpl::ContinueBackgroundWork() {
   if (bg_work_paused_ == 0) {
     return Status::InvalidArgument();
   }
-  assert(bg_work_paused_ > 0);
-  assert(bg_compaction_paused_ > 0);
+  terarkdb_assert(bg_work_paused_ > 0);
+  terarkdb_assert(bg_compaction_paused_ > 0);
   bg_compaction_paused_--;
   bg_work_paused_--;
   // It's sufficient to check just bg_work_paused_ here since
@@ -1239,7 +1240,7 @@ void DBImpl::NotifyOnCompactionCompleted(
 // REQUIREMENT: block all background work by calling PauseBackgroundWork()
 // before calling this function
 Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
-  assert(level < cfd->NumberLevels());
+  terarkdb_assert(level < cfd->NumberLevels());
   if (target_level >= cfd->NumberLevels()) {
     return Status::InvalidArgument("Target level exceeds number of levels");
   }
@@ -1383,8 +1384,8 @@ Status DBImpl::RunManualCompaction(
     const Slice* begin, const Slice* end,
     const chash_set<uint64_t>* files_being_compact, bool exclusive,
     bool disallow_trivial_move) {
-  assert(input_level == ColumnFamilyData::kCompactAllLevels ||
-         input_level >= 0);
+  terarkdb_assert(input_level == ColumnFamilyData::kCompactAllLevels ||
+                  input_level >= 0);
 
   InternalKey begin_storage, end_storage;
   CompactionArg* ca;
@@ -1461,7 +1462,7 @@ Status DBImpl::RunManualCompaction(
   // the compaction will set manual.status to bg_error_ and set manual.done to
   // true.
   while (!manual.done) {
-    assert(HasPendingManualCompaction());
+    terarkdb_assert(HasPendingManualCompaction());
     manual_conflict = false;
     Compaction* compaction = nullptr;
     if (ShouldntRunManualCompaction(&manual) || manual.in_progress ||
@@ -1475,11 +1476,11 @@ Status DBImpl::RunManualCompaction(
           manual_conflict))) {
       // exclusive manual compactions should not see a conflict during
       // CompactRange
-      assert(!exclusive || !manual_conflict);
+      terarkdb_assert(!exclusive || !manual_conflict);
       // Running either this or some other manual compaction
       bg_cv_.Wait();
       if (scheduled && manual.incomplete) {
-        assert(!manual.in_progress);
+        terarkdb_assert(!manual.in_progress);
         scheduled = false;
         manual.incomplete = false;
       }
@@ -1502,8 +1503,8 @@ Status DBImpl::RunManualCompaction(
     }
   }
 
-  assert(!manual.in_progress);
-  assert(HasPendingManualCompaction());
+  terarkdb_assert(!manual.in_progress);
+  terarkdb_assert(HasPendingManualCompaction());
   RemoveManualCompaction(&manual);
   bg_cv_.SignalAll();
   return manual.status;
@@ -1511,9 +1512,9 @@ Status DBImpl::RunManualCompaction(
 
 void DBImpl::ProcessAtomicFlushGroup(autovector<ColumnFamilyData*>* cfds,
                                      FlushRequestVec* req_vec) {
-  assert(cfds != nullptr);
-  assert(req_vec != nullptr);
-  assert(req_vec->size() == 0);
+  terarkdb_assert(cfds != nullptr);
+  terarkdb_assert(req_vec != nullptr);
+  terarkdb_assert(req_vec->size() == 0);
   chash_map<AtomicFlushGroup*, size_t> selected_group;
 
   size_t cfd_count = 0;
@@ -1536,7 +1537,7 @@ void DBImpl::ProcessAtomicFlushGroup(autovector<ColumnFamilyData*>* cfds,
     }
   }
   if (selected_group.empty()) {
-    assert(cfd_count == cfds->size());
+    terarkdb_assert(cfd_count == cfds->size());
   } else {
     for (auto cfd : *versions_->column_family_set_) {
       auto group = cfd->ioptions()->atomic_flush_group;
@@ -1947,14 +1948,14 @@ int DBImpl::GetSubCompactionSlots(uint32_t max_subcompactions) {
 }
 
 void DBImpl::AddToCompactionQueue(ColumnFamilyData* cfd) {
-  assert(!cfd->queued_for_compaction());
+  terarkdb_assert(!cfd->queued_for_compaction());
   cfd->Ref();
   compaction_queue_.push_back(cfd);
   cfd->set_queued_for_compaction(true);
 }
 
 ColumnFamilyData* DBImpl::PopFirstFromCompactionQueue() {
-  assert(!compaction_queue_.empty());
+  terarkdb_assert(!compaction_queue_.empty());
   auto max_iter = compaction_queue_.begin();
   double max_load = (*max_iter)->current()->GetCompactionLoad();
   for (auto it = std::next(max_iter); it != compaction_queue_.end(); ++it) {
@@ -1966,20 +1967,20 @@ ColumnFamilyData* DBImpl::PopFirstFromCompactionQueue() {
   }
   auto cfd = *max_iter;
   compaction_queue_.erase(max_iter);
-  assert(cfd->queued_for_compaction());
+  terarkdb_assert(cfd->queued_for_compaction());
   cfd->set_queued_for_compaction(false);
   return cfd;
 }
 
 void DBImpl::AddToGarbageCollectionQueue(ColumnFamilyData* cfd) {
-  assert(!cfd->queued_for_garbage_collection());
+  terarkdb_assert(!cfd->queued_for_garbage_collection());
   cfd->Ref();
   garbage_collection_queue_.push_back(cfd);
   cfd->set_queued_for_garbage_collection(true);
 }
 
 ColumnFamilyData* DBImpl::PopFirstFromGarbageCollectionQueue() {
-  assert(!garbage_collection_queue_.empty());
+  terarkdb_assert(!garbage_collection_queue_.empty());
   auto max_iter = garbage_collection_queue_.begin();
   double max_load = (*max_iter)->current()->GetGarbageCollectionLoad();
   for (auto it = std::next(max_iter); it != garbage_collection_queue_.end();
@@ -1992,15 +1993,15 @@ ColumnFamilyData* DBImpl::PopFirstFromGarbageCollectionQueue() {
   }
   auto cfd = *max_iter;
   garbage_collection_queue_.erase(max_iter);
-  assert(cfd->queued_for_garbage_collection());
+  terarkdb_assert(cfd->queued_for_garbage_collection());
   cfd->set_queued_for_garbage_collection(false);
   return cfd;
 }
 
 DBImpl::FlushRequest DBImpl::PopFirstFromFlushQueue() {
-  assert(!flush_queue_.empty());
+  terarkdb_assert(!flush_queue_.empty());
   FlushRequest flush_req = flush_queue_.front();
-  assert(unscheduled_flushes_ >= static_cast<int>(flush_req.size()));
+  terarkdb_assert(unscheduled_flushes_ >= static_cast<int>(flush_req.size()));
   unscheduled_flushes_ -= static_cast<int>(flush_req.size());
   flush_queue_.pop_front();
   // TODO: need to unset flush reason?
@@ -2086,8 +2087,8 @@ void DBImpl::BGWorkBottomCompaction(void* arg) {
   IOSTATS_SET_THREAD_POOL_ID(Env::Priority::BOTTOM);
   TEST_SYNC_POINT("DBImpl::BGWorkBottomCompaction");
   auto* prepicked_compaction = ca.prepicked_compaction;
-  assert(prepicked_compaction && prepicked_compaction->compaction &&
-         !prepicked_compaction->manual_compaction_state);
+  terarkdb_assert(prepicked_compaction && prepicked_compaction->compaction &&
+                  !prepicked_compaction->manual_compaction_state);
   ca.db->BackgroundCallCompaction(prepicked_compaction, Env::Priority::BOTTOM);
   delete prepicked_compaction;
 }
@@ -2242,7 +2243,7 @@ void DBImpl::BackgroundCallFlush() {
 #endif  // ROCKSDB_LITE
     FillLogWriterPool();
 
-    assert(bg_flush_scheduled_);
+    terarkdb_assert(bg_flush_scheduled_);
     num_running_flushes_++;
     FlushReason reason;
 
@@ -2292,7 +2293,7 @@ void DBImpl::BackgroundCallFlush() {
     }
     TEST_SYNC_POINT("DBImpl::BackgroundCallFlush:ContextCleanedUp");
 
-    assert(num_running_flushes_ > 0);
+    terarkdb_assert(num_running_flushes_ > 0);
     num_running_flushes_--;
     bg_flush_scheduled_--;
     // See if there's more work to be done
@@ -2325,9 +2326,10 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
     auto pending_outputs_inserted_elem =
         CaptureCurrentFileNumberInPendingOutputs();
 
-    assert((bg_thread_pri == Env::Priority::BOTTOM &&
-            bg_bottom_compaction_scheduled_) ||
-           (bg_thread_pri == Env::Priority::LOW && bg_compaction_scheduled_));
+    terarkdb_assert(
+        (bg_thread_pri == Env::Priority::BOTTOM &&
+         bg_bottom_compaction_scheduled_) ||
+        (bg_thread_pri == Env::Priority::LOW && bg_compaction_scheduled_));
     Status s = BackgroundCompaction(&made_progress, &job_context, &log_buffer,
                                     prepicked_compaction);
     TEST_SYNC_POINT("BackgroundCallCompaction:1");
@@ -2376,12 +2378,12 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
       mutex_.Lock();
     }
 
-    assert(num_running_compactions_ > 0);
+    terarkdb_assert(num_running_compactions_ > 0);
     num_running_compactions_--;
     if (bg_thread_pri == Env::Priority::LOW) {
       bg_compaction_scheduled_--;
     } else {
-      assert(bg_thread_pri == Env::Priority::BOTTOM);
+      terarkdb_assert(bg_thread_pri == Env::Priority::BOTTOM);
       bg_bottom_compaction_scheduled_--;
     }
 
@@ -2426,7 +2428,7 @@ void DBImpl::BackgroundCallGarbageCollection() {
     auto pending_outputs_inserted_elem =
         CaptureCurrentFileNumberInPendingOutputs();
 
-    assert(bg_garbage_collection_scheduled_);
+    terarkdb_assert(bg_garbage_collection_scheduled_);
     Status s =
         BackgroundGarbageCollection(&made_progress, &job_context, &log_buffer);
     TEST_SYNC_POINT("BackgroundCallGarbageCollection:1");
@@ -2477,7 +2479,7 @@ void DBImpl::BackgroundCallGarbageCollection() {
       mutex_.Lock();
     }
 
-    assert(num_running_garbage_collections_ > 0);
+    terarkdb_assert(num_running_garbage_collections_ > 0);
     num_running_garbage_collections_--;
     bg_compaction_scheduled_--;
     bg_garbage_collection_scheduled_--;
@@ -2567,7 +2569,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
   std::string cf_name = "(null)";
   if (is_manual) {
     ManualCompactionState* m = manual_compaction;
-    assert(m->in_progress);
+    terarkdb_assert(m->in_progress);
     enable_lazy_compaction = m->cfd->ioptions()->enable_lazy_compaction;
     cf_name = m->cfd->GetName();
     if (!c) {
@@ -2799,7 +2801,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     if (use_custom_gc_ && snapshot_checker == nullptr) {
       snapshot_checker = DisableGCSnapshotChecker::Instance();
     }
-    assert(is_snapshot_supported_ || snapshots_.empty());
+    terarkdb_assert(is_snapshot_supported_ || snapshots_.empty());
     CompactionJob compaction_job(
         job_context->job_id, c.get(), immutable_db_options_,
         env_options_for_compaction_, versions_.get(), &shutting_down_,
@@ -2859,7 +2861,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       // Put this cfd back in the compaction queue so we can retry after some
       // time
       auto cfd = c->column_family_data();
-      assert(cfd != nullptr);
+      terarkdb_assert(cfd != nullptr);
       // Since this compaction failed, we need to recompute the score so it
       // takes the original input files into account
       c->column_family_data()
@@ -2906,9 +2908,9 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
           enable_lazy_compaction) {
         // do nothing
       } else {
-        assert(m->cfd->ioptions()->compaction_style !=
-                   kCompactionStyleUniversal ||
-               m->cfd->ioptions()->num_levels > 1);
+        terarkdb_assert(m->cfd->ioptions()->compaction_style !=
+                            kCompactionStyleUniversal ||
+                        m->cfd->ioptions()->num_levels > 1);
         m->tmp_storage = *m->manual_end;
         m->begin = &m->tmp_storage;
       }
@@ -3089,7 +3091,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
       // Put this cfd back in the garbage collection queue so we can retry after
       // some time
       auto cfd = c->column_family_data();
-      assert(cfd != nullptr);
+      terarkdb_assert(cfd != nullptr);
 
       if (!cfd->queued_for_garbage_collection()) {
         AddToGarbageCollectionQueue(cfd);
@@ -3123,7 +3125,7 @@ void DBImpl::RemoveManualCompaction(DBImpl::ManualCompactionState* m) {
     }
     it++;
   }
-  assert(false);
+  terarkdb_assert(false);
 }
 
 bool DBImpl::ShouldntRunManualCompaction(ManualCompactionState* m) {
@@ -3247,7 +3249,7 @@ void DBImpl::SetSnapshotChecker(SnapshotChecker* snapshot_checker) {
   // snapshot_checker_ should only set once. If we need to set it multiple
   // times, we need to make sure the old one is not deleted while it is still
   // using by a compaction job.
-  assert(!snapshot_checker_);
+  terarkdb_assert(!snapshot_checker_);
   snapshot_checker_.reset(snapshot_checker);
 }
 }  // namespace TERARKDB_NAMESPACE

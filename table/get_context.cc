@@ -147,10 +147,10 @@ void GetContext::ReportCounters() {
 
 bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                            LazyBuffer&& value, bool* matched) {
-  assert(matched);
-  assert((state_ != kMerge && parsed_key.type != kTypeMerge &&
-          parsed_key.type != kTypeMergeIndex) ||
-         merge_context_ != nullptr || separate_helper_ == nullptr);
+  terarkdb_assert(matched);
+  terarkdb_assert((state_ != kMerge && parsed_key.type != kTypeMerge &&
+                   parsed_key.type != kTypeMergeIndex) ||
+                  merge_context_ != nullptr || separate_helper_ == nullptr);
   if (ucmp_->Equal(parsed_key.user_key, user_key_)) {
     if (PackSequenceAndType(parsed_key.sequence, parsed_key.type) <
         min_seq_type_) {
@@ -205,9 +205,9 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                                                   parsed_key.sequence, value);
         FALLTHROUGH_INTENDED;
       case kTypeValue:
-        assert(state_ == kNotFound || state_ == kMerge);
+        terarkdb_assert(state_ == kNotFound || state_ == kMerge);
         if (separate_helper_ == nullptr) {
-          assert(kNotFound == state_);
+          terarkdb_assert(kNotFound == state_);
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
@@ -221,7 +221,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             OK(std::move(value).dump(*lazy_val_));
           }
         } else if (kMerge == state_) {
-          assert(merge_operator_ != nullptr);
+          terarkdb_assert(merge_operator_ != nullptr);
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             if (OK(MergeHelper::TimedFullMerge(
@@ -239,7 +239,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       case kTypeRangeDeletion:
         // TODO(noetzli): Verify correctness once merge of single-deletes
         // is supported
-        assert(state_ == kNotFound || state_ == kMerge);
+        terarkdb_assert(state_ == kNotFound || state_ == kMerge);
         if (kNotFound == state_) {
           state_ = kDeleted;
         } else if (kMerge == state_) {
@@ -268,9 +268,9 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                                                   parsed_key.sequence, value);
         FALLTHROUGH_INTENDED;
       case kTypeMerge:
-        assert(state_ == kNotFound || state_ == kMerge);
+        terarkdb_assert(state_ == kNotFound || state_ == kMerge);
         if (separate_helper_ == nullptr) {
-          assert(kNotFound == state_);
+          terarkdb_assert(kNotFound == state_);
           state_ = kMerge;
           if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
@@ -297,7 +297,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         return true;
 
       default:
-        assert(false);
+        terarkdb_assert(false);
         break;
     }
   }

@@ -132,9 +132,10 @@ void ReleaseCachedEntry(void* arg, void* h) {
 Slice GetCacheKeyFromOffset(const char* cache_key_prefix,
                             size_t cache_key_prefix_size, uint64_t offset,
                             char* cache_key) {
-  assert(cache_key != nullptr);
-  assert(cache_key_prefix_size != 0);
-  assert(cache_key_prefix_size <= BlockBasedTable::kMaxCacheKeyPrefixSize);
+  terarkdb_assert(cache_key != nullptr);
+  terarkdb_assert(cache_key_prefix_size != 0);
+  terarkdb_assert(cache_key_prefix_size <=
+                  BlockBasedTable::kMaxCacheKeyPrefixSize);
   memcpy(cache_key, cache_key_prefix, cache_key_prefix_size);
   char* end = EncodeVarint64(cache_key + cache_key_prefix_size, offset);
   return Slice(cache_key, static_cast<size_t>(end - cache_key));
@@ -329,7 +330,7 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
           prefetch_buffer.get(), rep, ro, handle, compression_dict, &block,
           is_index, nullptr /* get_context */);
 
-      assert(s.ok() || block.value == nullptr);
+      terarkdb_assert(s.ok() || block.value == nullptr);
       if (s.ok() && block.value != nullptr) {
         if (block.cache_handle != nullptr) {
           if (pin) {
@@ -352,7 +353,7 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
   }
 
   virtual size_t ApproximateMemoryUsage() const override {
-    assert(index_block_);
+    terarkdb_assert(index_block_);
     size_t usage = index_block_->ApproximateMemoryUsage();
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
     usage += malloc_usable_size((void*)this);
@@ -374,7 +375,7 @@ class PartitionIndexReader : public IndexReader, public Cleanable {
         index_block_(std::move(index_block)),
         index_key_includes_seq_(index_key_includes_seq),
         index_value_is_full_(index_value_is_full) {
-    assert(index_block_ != nullptr);
+    terarkdb_assert(index_block_ != nullptr);
   }
   BlockBasedTable* table_;
   std::unique_ptr<Block> index_block_;
@@ -437,7 +438,7 @@ class BinarySearchIndexReader : public IndexReader {
   }
 
   virtual size_t ApproximateMemoryUsage() const override {
-    assert(index_block_);
+    terarkdb_assert(index_block_);
     size_t usage = index_block_->ApproximateMemoryUsage();
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
     usage += malloc_usable_size((void*)this);
@@ -456,7 +457,7 @@ class BinarySearchIndexReader : public IndexReader {
         index_block_(std::move(index_block)),
         index_key_includes_seq_(index_key_includes_seq),
         index_value_is_full_(index_value_is_full) {
-    assert(index_block_ != nullptr);
+    terarkdb_assert(index_block_ != nullptr);
   }
   std::unique_ptr<Block> index_block_;
   const bool index_key_includes_seq_;
@@ -569,7 +570,7 @@ class HashIndexReader : public IndexReader {
   }
 
   virtual size_t ApproximateMemoryUsage() const override {
-    assert(index_block_);
+    terarkdb_assert(index_block_);
     size_t usage = index_block_->ApproximateMemoryUsage();
     usage += prefixes_contents_.usable_size();
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
@@ -592,7 +593,7 @@ class HashIndexReader : public IndexReader {
         index_block_(std::move(index_block)),
         index_key_includes_seq_(index_key_includes_seq),
         index_value_is_full_(index_value_is_full) {
-    assert(index_block_ != nullptr);
+    terarkdb_assert(index_block_ != nullptr);
   }
 
   ~HashIndexReader() {}
@@ -606,7 +607,7 @@ class HashIndexReader : public IndexReader {
 
 // Helper function to setup the cache key's prefix for the Table.
 void BlockBasedTable::SetupCacheKeyPrefix(Rep* rep, uint64_t file_size) {
-  assert(kMaxCacheKeyPrefixSize >= 10);
+  terarkdb_assert(kMaxCacheKeyPrefixSize >= 10);
   rep->cache_key_prefix_size = 0;
   rep->compressed_cache_key_prefix_size = 0;
   if (rep->table_options.block_cache != nullptr) {
@@ -744,9 +745,9 @@ Status GetGlobalSequenceNumber(const TableProperties& table_properties,
 Slice BlockBasedTable::GetCacheKey(const char* cache_key_prefix,
                                    size_t cache_key_prefix_size,
                                    const BlockHandle& handle, char* cache_key) {
-  assert(cache_key != nullptr);
-  assert(cache_key_prefix_size != 0);
-  assert(cache_key_prefix_size <= kMaxCacheKeyPrefixSize);
+  terarkdb_assert(cache_key != nullptr);
+  terarkdb_assert(cache_key_prefix_size != 0);
+  terarkdb_assert(cache_key_prefix_size <= kMaxCacheKeyPrefixSize);
   memcpy(cache_key, cache_key_prefix, cache_key_prefix_size);
   char* end =
       EncodeVarint64(cache_key + cache_key_prefix_size, handle.offset());
@@ -872,7 +873,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
           prefix = kFilterBlockPrefix;
           break;
         default:
-          assert(0);
+          terarkdb_assert(0);
       }
       std::string filter_block_key = prefix;
       filter_block_key.append(rep->filter_policy->Name());
@@ -908,7 +909,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
                      "block %s",
                      s.ToString().c_str());
     } else {
-      assert(table_properties != nullptr);
+      terarkdb_assert(table_properties != nullptr);
       rep->table_properties.reset(table_properties);
       rep->blocks_maybe_compressed =
           rep->table_properties_base.compression_name !=
@@ -999,7 +1000,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     std::unique_ptr<InternalIteratorBase<Slice>> iter(
         NewDataBlockIterator<DataBlockIter>(rep, read_options,
                                             range_del_handle));
-    assert(iter != nullptr);
+    terarkdb_assert(iter != nullptr);
     s = iter->status();
     if (!s.ok()) {
       ROCKS_LOG_WARN(
@@ -1028,7 +1029,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
       prefetch_all || (table_options.pin_top_level_index_and_filter &&
                        rep->filter_type == Rep::FilterType::kPartitionedFilter);
   // Partition fitlers cannot be enabled without partition indexes
-  assert(!prefetch_filter || prefetch_index);
+  terarkdb_assert(!prefetch_filter || prefetch_index);
   // pin both index and filters, down to all partitions
   const bool pin_all =
       rep->table_options.pin_l0_filter_and_index_blocks_in_cache && level == 0;
@@ -1044,7 +1045,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
   // Will use block cache for index/filter blocks access
   // Always prefetch index and filter for level 0
   if (table_options.cache_index_and_filter_blocks) {
-    assert(table_options.block_cache != nullptr);
+    terarkdb_assert(table_options.block_cache != nullptr);
     if (prefetch_index) {
       // Hack: Call NewIndexIterator() to implicitly add index to the
       // block_cache
@@ -1061,7 +1062,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
         // This is the first call to NewIndexIterator() since we're in Open().
         // On success it should give us ownership of the `CachableEntry` by
         // populating `index_entry`.
-        assert(index_entry.value != nullptr);
+        terarkdb_assert(index_entry.value != nullptr);
         if (prefetch_all) {
           index_entry.value->CacheDependencies(pin_all);
         }
@@ -1124,9 +1125,9 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
   }
 
   if (s.ok()) {
-    assert(prefetch_buffer.get() != nullptr);
+    terarkdb_assert(prefetch_buffer.get() != nullptr);
     if (tail_prefetch_stats != nullptr) {
-      assert(prefetch_buffer->min_offset_read() < file_size);
+      terarkdb_assert(prefetch_buffer->min_offset_read() < file_size);
       tail_prefetch_stats->RecordEffectiveSize(
           static_cast<size_t>(file_size) - prefetch_buffer->min_offset_read());
     }
@@ -1154,7 +1155,7 @@ void BlockBasedTable::SetupForCompaction() {
       rep_->file->file()->Hint(RandomAccessFile::WILLNEED);
       break;
     default:
-      assert(false);
+      terarkdb_assert(false);
   }
 }
 
@@ -1177,7 +1178,7 @@ std::shared_ptr<const TableProperties> BlockBasedTable::GetTableProperties()
     if (!s.ok()) {
       return nullptr;
     }
-    assert(props != nullptr);
+    terarkdb_assert(props != nullptr);
     return std::shared_ptr<const TableProperties>(props);
   }
 }
@@ -1261,13 +1262,13 @@ Status BlockBasedTable::GetDataBlockFromCache(
   }
 
   // If not found, search from the compressed block cache.
-  assert(block->cache_handle == nullptr && block->value == nullptr);
+  terarkdb_assert(block->cache_handle == nullptr && block->value == nullptr);
 
   if (block_cache_compressed == nullptr) {
     return s;
   }
 
-  assert(!compressed_block_cache_key.empty());
+  terarkdb_assert(!compressed_block_cache_key.empty());
   block_cache_compressed_handle =
       block_cache_compressed->Lookup(compressed_block_cache_key);
   // if we found in the compressed cache, then uncompress and insert into
@@ -1282,7 +1283,7 @@ Status BlockBasedTable::GetDataBlockFromCache(
   compressed_block = reinterpret_cast<BlockContents*>(
       block_cache_compressed->Value(block_cache_compressed_handle));
   CompressionType compression_type = compressed_block->get_compression_type();
-  assert(compression_type != kNoCompression);
+  terarkdb_assert(compression_type != kNoCompression);
 
   // Retrieve the uncompressed contents into a new buffer
   BlockContents contents;
@@ -1356,8 +1357,8 @@ Status BlockBasedTable::PutDataBlockToCache(
     const Slice& compression_dict, SequenceNumber seq_no,
     size_t read_amp_bytes_per_bit, MemoryAllocator* memory_allocator,
     bool is_index, Cache::Priority priority, GetContext* get_context) {
-  assert(raw_block_comp_type == kNoCompression ||
-         block_cache_compressed != nullptr);
+  terarkdb_assert(raw_block_comp_type == kNoCompression ||
+                  block_cache_compressed != nullptr);
 
   Status s;
   // Retrieve the uncompressed contents into a new buffer
@@ -1391,7 +1392,7 @@ Status BlockBasedTable::PutDataBlockToCache(
       raw_block_comp_type != kNoCompression && raw_block_contents != nullptr &&
       raw_block_contents->own_bytes()) {
 #ifndef NDEBUG
-    assert(raw_block_contents->is_raw_block);
+    terarkdb_assert(raw_block_contents->is_raw_block);
 #endif  // NDEBUG
 
     // We cannot directly put raw_block_contents because this could point to
@@ -1421,7 +1422,7 @@ Status BlockBasedTable::PutDataBlockToCache(
     block_cache->TEST_mark_as_data_block(block_cache_key, charge);
 #endif  // NDEBUG
     if (s.ok()) {
-      assert(cached_block->cache_handle != nullptr);
+      terarkdb_assert(cached_block->cache_handle != nullptr);
       if (get_context != nullptr) {
         get_context->get_context_stats_.num_cache_add++;
         get_context->get_context_stats_.num_cache_bytes_write += charge;
@@ -1447,8 +1448,8 @@ Status BlockBasedTable::PutDataBlockToCache(
           RecordTick(statistics, BLOCK_CACHE_DATA_BYTES_INSERT, charge);
         }
       }
-      assert(reinterpret_cast<Block*>(block_cache->Value(
-                 cached_block->cache_handle)) == cached_block->value);
+      terarkdb_assert(reinterpret_cast<Block*>(block_cache->Value(
+                          cached_block->cache_handle)) == cached_block->value);
     } else {
       RecordTick(statistics, BLOCK_CACHE_ADD_FAILURES);
       delete cached_block->value;
@@ -1485,7 +1486,7 @@ FilterBlockReader* BlockBasedTable::ReadFilter(
     return nullptr;
   }
 
-  assert(rep->filter_policy);
+  terarkdb_assert(rep->filter_policy);
 
   auto filter_type = rep->filter_type;
   if (rep->filter_type == Rep::FilterType::kPartitionedFilter &&
@@ -1514,7 +1515,7 @@ FilterBlockReader* BlockBasedTable::ReadFilter(
     case Rep::FilterType::kFullFilter: {
       auto filter_bits_reader =
           rep->filter_policy->GetFilterBitsReader(block.data);
-      assert(filter_bits_reader != nullptr);
+      terarkdb_assert(filter_bits_reader != nullptr);
       return new FullFilterBlockReader(
           rep->prefix_filtering ? prefix_extractor : nullptr,
           rep->whole_key_filtering, std::move(block), filter_bits_reader,
@@ -1524,7 +1525,7 @@ FilterBlockReader* BlockBasedTable::ReadFilter(
     default:
       // filter_type is either kNoFilter (exited the function at the first if),
       // or it must be covered in this switch block
-      assert(false);
+      terarkdb_assert(false);
       return nullptr;
   }
 }
@@ -1682,7 +1683,7 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
     TEST_SYNC_POINT("BlockBasedTable::NewIndexIterator::thread1:4");
     size_t charge = 0;
     if (s.ok()) {
-      assert(index_reader != nullptr);
+      terarkdb_assert(index_reader != nullptr);
       charge = index_reader->ApproximateMemoryUsage();
       s = block_cache->Insert(
           key, index_reader, charge, &DeleteCachedIndexEntry, &cache_handle,
@@ -1716,7 +1717,7 @@ InternalIteratorBase<BlockHandle>* BlockBasedTable::NewIndexIterator(
     }
   }
 
-  assert(cache_handle);
+  terarkdb_assert(cache_handle);
   // We don't return pinned datat from index blocks, so no need
   // to set `block_contents_pinned`.
   auto* iter = index_reader->NewIterator(
@@ -1791,7 +1792,7 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
   }
 
   if (s.ok()) {
-    assert(block.value != nullptr);
+    terarkdb_assert(block.value != nullptr);
     const bool kTotalOrderSeek = true;
     // Block contents are pinned and it is still pinned after the iterator
     // is destoryed as long as cleanup functions are moved to another object,
@@ -1822,13 +1823,14 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
         char cache_key[kExtraCacheKeyPrefix + kMaxVarint64Length];
         // Prefix: use rep->cache_key_prefix padded by 0s
         memset(cache_key, 0, kExtraCacheKeyPrefix + kMaxVarint64Length);
-        assert(rep->cache_key_prefix_size != 0);
-        assert(rep->cache_key_prefix_size <= kExtraCacheKeyPrefix);
+        terarkdb_assert(rep->cache_key_prefix_size != 0);
+        terarkdb_assert(rep->cache_key_prefix_size <= kExtraCacheKeyPrefix);
         memcpy(cache_key, rep->cache_key_prefix, rep->cache_key_prefix_size);
         char* end = EncodeVarint64(cache_key + kExtraCacheKeyPrefix,
                                    next_cache_key_id_++);
-        assert(end - cache_key <=
-               static_cast<int>(kExtraCacheKeyPrefix + kMaxVarint64Length));
+        terarkdb_assert(
+            end - cache_key <=
+            static_cast<int>(kExtraCacheKeyPrefix + kMaxVarint64Length));
         Slice unique_key =
             Slice(cache_key, static_cast<size_t>(end - cache_key));
         s = block_cache->Insert(unique_key, nullptr,
@@ -1843,7 +1845,7 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
       iter->RegisterCleanup(&DeleteHeldResource<Block>, block.value, nullptr);
     }
   } else {
-    assert(block.value == nullptr);
+    terarkdb_assert(block.value == nullptr);
     iter->Invalidate(s);
   }
   return iter;
@@ -1853,7 +1855,7 @@ Status BlockBasedTable::MaybeReadBlockAndLoadToCache(
     FilePrefetchBuffer* prefetch_buffer, Rep* rep, const ReadOptions& ro,
     const BlockHandle& handle, Slice compression_dict,
     CachableEntry<Block>* block_entry, bool is_index, GetContext* get_context) {
-  assert(block_entry != nullptr);
+  terarkdb_assert(block_entry != nullptr);
   const bool no_io = (ro.read_tier == kBlockCacheTier);
   Cache* block_cache = rep->table_options.block_cache.get();
 
@@ -1927,7 +1929,7 @@ Status BlockBasedTable::MaybeReadBlockAndLoadToCache(
       }
     }
   }
-  assert(s.ok() || block_entry->value == nullptr);
+  terarkdb_assert(s.ok() || block_entry->value == nullptr);
   return s;
 }
 
@@ -1958,7 +1960,7 @@ BlockBasedTable::PartitionedIndexIteratorState::NewSecondaryIterator(
     RecordTick(rep->ioptions.statistics, BLOCK_CACHE_INDEX_HIT);
     RecordTick(rep->ioptions.statistics, BLOCK_CACHE_HIT);
     Cache* block_cache = rep->table_options.block_cache.get();
-    assert(block_cache);
+    terarkdb_assert(block_cache);
     RecordTick(rep->ioptions.statistics, BLOCK_CACHE_BYTES_READ,
                block_cache->GetUsage(block->second.cache_handle));
     Statistics* kNullStats = nullptr;
@@ -2122,7 +2124,7 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(
   block_iter_.Seek(target);
 
   FindKeyForward();
-  assert(
+  terarkdb_assert(
       !block_iter_.Valid() ||
       (key_includes_seq_ && icomp_.Compare(target, block_iter_.key()) <= 0) ||
       (!key_includes_seq_ &&
@@ -2170,8 +2172,8 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekForPrev(
   block_iter_.SeekForPrev(target);
 
   FindKeyBackward();
-  assert(!block_iter_.Valid() ||
-         icomp_.Compare(target, block_iter_.key()) >= 0);
+  terarkdb_assert(!block_iter_.Valid() ||
+                  icomp_.Compare(target, block_iter_.key()) >= 0);
 }
 
 template <class TBlockIter, typename TValue>
@@ -2204,14 +2206,14 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToLast() {
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::Next() {
-  assert(block_iter_points_to_real_block_);
+  terarkdb_assert(block_iter_points_to_real_block_);
   block_iter_.Next();
   FindKeyForward();
 }
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::Prev() {
-  assert(block_iter_points_to_real_block_);
+  terarkdb_assert(block_iter_points_to_real_block_);
   block_iter_.Prev();
   FindKeyBackward();
 }
@@ -2268,7 +2270,7 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::InitDataBlock() {
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyForward() {
-  assert(!is_out_of_bound_);
+  terarkdb_assert(!is_out_of_bound_);
   // TODO the while loop inherits from two-level-iterator. We don't know
   // whether a block can be empty so it can be replaced by an "if".
   while (!block_iter_.Valid()) {
@@ -2308,7 +2310,7 @@ void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyForward() {
 
 template <class TBlockIter, typename TValue>
 void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyBackward() {
-  assert(!is_out_of_bound_);
+  terarkdb_assert(!is_out_of_bound_);
   while (!block_iter_.Valid()) {
     if (!block_iter_.status().ok()) {
       return;
@@ -2405,7 +2407,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
                             GetContext* get_context,
                             const SliceTransform* prefix_extractor,
                             bool skip_filters) {
-  assert(key.size() >= 8);  // key must be internal key
+  terarkdb_assert(key.size() >= 8);  // key must be internal key
   Status s;
   const bool no_io = read_options.read_tier == kBlockCacheTier;
   CachableEntry<FilterBlockReader> filter_entry;
@@ -2496,7 +2498,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
             auto context = get_context(buffer);
             DataBlockIter* iter =
                 reinterpret_cast<DataBlockIter*>(context->data[0]);
-            assert(iter != nullptr);
+            terarkdb_assert(iter != nullptr);
             Cleanable release_cached_entry = iter->RefCache();
             if (release_cached_entry.Empty()) {
               return Status::NotSupported();
@@ -2699,12 +2701,12 @@ bool BlockBasedTable::TEST_KeyInCache(const ReadOptions& options,
   std::unique_ptr<InternalIteratorBase<BlockHandle>> iiter(
       NewIndexIterator(options));
   iiter->Seek(key);
-  assert(iiter->Valid());
+  terarkdb_assert(iiter->Valid());
   CachableEntry<Block> block;
 
   BlockHandle handle = iiter->value();
   Cache* block_cache = rep_->table_options.block_cache.get();
-  assert(block_cache != nullptr);
+  terarkdb_assert(block_cache != nullptr);
 
   char cache_key_storage[kMaxCacheKeyPrefixSize + kMaxVarint64Length];
   Slice cache_key =
@@ -2718,7 +2720,7 @@ bool BlockBasedTable::TEST_KeyInCache(const ReadOptions& options,
       rep_->compression_dict_block ? rep_->compression_dict_block->data
                                    : Slice(),
       0 /* read_amp_bytes_per_bit */);
-  assert(s.ok());
+  terarkdb_assert(s.ok());
   bool in_cache = block.value != nullptr;
   if (in_cache) {
     ReleaseCachedEntry(block_cache, block.cache_handle);
