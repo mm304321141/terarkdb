@@ -1462,4 +1462,32 @@ struct TraceOptions {
   uint64_t max_trace_file_size = uint64_t{64} * 1024 * 1024 * 1024;
 };
 
+extern const std::string kRangeFileFormatWAL;
+
+struct ExportRangeOptions {
+  // 允许指定到处某个 Snapshot 的数据集，解决多 CF 导出的一致性问题
+  Snapshot* snapshot;
+  // 以什么协议导出（用于升级兼容性）
+  std::string range_file_format = kRangeFileFormatWAL;
+  // 缓冲区大小
+  size_t buffer_limit = 8 * 1024 * 1024;
+  // 输出文件选项
+  EnvOptions output_file_options;
+};
+
+struct ImportRangeOptions {
+  enum ImportMode {
+    // 区间有重叠 Key 则失败
+    kErrorIfOverlapped = 0,
+    // 不做清理，直接合并区间
+    kSkipCheck = 1,
+    // 使用 RangeDeletion 清理区间
+    kCleanupUseRangeDeletion = 2,
+  };
+  // 其它两个Mode暂时不做实现
+  ImportMode mode = kErrorIfOverlapped;
+  // 导入的文件协议
+  std::string range_file_format = kRangeFileFormatWAL;
+};
+
 }  // namespace TERARKDB_NAMESPACE

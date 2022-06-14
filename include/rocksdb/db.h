@@ -1309,6 +1309,22 @@ class DB {
     return Status::NotSupported("GetStatsHistory() is not implemented.");
   }
 
+  // [begin_key, end_key)
+  virtual Status ExportRange(const ExportRangeOptions& options,
+                             ColumnFamilyHandle* column_family,
+                             const Slice& begin_key, const Slice& end_key,
+                             std::unique_ptr<WritableFile>&& output_file) {
+    return Status::NotSupported("ExportRange() is not implemented.");
+  }
+
+  // [begin_key, end_key)
+  virtual Status ImportRange(const ImportRangeOptions& options,
+                             ColumnFamilyHandle* column_family,
+                             const Slice& begin_key, const Slice& end_key,
+                             std::unique_ptr<SequentialFile>&& input_file) {
+    return Status::NotSupported("ImportRange() is not implemented.");
+  }
+
  private:
   // No copying allowed
   DB(const DB&);

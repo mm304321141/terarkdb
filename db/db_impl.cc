@@ -4776,4 +4776,195 @@ Status DBImpl::TraceIteratorSeekForPrev(const uint32_t& cf_id,
 
 #endif  // ROCKSDB_LITE
 
+// [begin_key, end_key)
+Status DBImpl::ExportRange(const ExportRangeOptions& options,
+                           ColumnFamilyHandle* column_family,
+                           const Slice& begin_key, const Slice& end_key,
+                           std::unique_ptr<WritableFile>&& output_file) {
+  if (options.range_file_format != kRangeFileFormatWAL) {
+    return Status::NotSupported("ImportRange() only support 'wal'.");
+  }
+
+  Status status;
+  auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
+  auto cfd = cfh->cfd();
+  auto uc = cfd->user_comparator();
+
+  if (uc->Compare(begin_key, end_key) >= 0) {
+    return Status::InvalidArgument("Invalid range for begin_key/end_key.");
+  }
+
+  std::unique_ptr<const Snapshot, std::function<void(const Snapshot*)>>
+      snapshot_holder;
+  ReadOptions ro;
+  if (options.snapshot == nullptr) {
+    snapshot_holder =
+        std::unique_ptr<const Snapshot, std::function<void(const Snapshot*)>>(
+            GetSnapshot(), [this](const Snapshot* s) { ReleaseSnapshot(s); });
+    ro.snapshot = snapshot_holder.get();
+  } else {
+    ro.snapshot = options.snapshot;
+  }
+  size_t buffer_limit = std::max<size_t>(options.buffer_limit, 1024 * 1024);
+
+  std::string curr(begin_key.data(), begin_key.size());
+
+  auto file_writer = std::unique_ptr<WritableFileWriter>(new WritableFileWriter(
+      std::move(output_file), "ExportRange", options.output_file_options));
+  log::Writer writer(std::move(file_writer), 0, false);
+  WriteBatch batch(buffer_limit + 1024 * 1024);
+
+  // TODO(zhaoming.274): pipelined read & write
+  do {
+    auto iter = std::unique_ptr<Iterator>(NewIterator(ro, cfh));
+    status = iter->status();
+    if (status.ok()) {
+      for (iter->Seek(curr);
+           iter->Valid() && uc->Compare(iter->key(), end_key) < 0 &&
+           WriteBatchInternal::ByteSize(&batch) < buffer_limit;
+           iter->Next()) {
+        batch.Put(iter->key(), iter->value());
+      }
+      status = iter->status();
+      if (status.ok()) {
+        if (iter->Valid()) {
+          auto k = iter->key();
+          curr.assign(k.data(), k.size());
+        } else {
+          curr.assign(end_key.data(), end_key.size());
+        }
+      }
+    }
+    iter.reset();
+    if (status.ok()) {
+      if (WriteBatchInternal::Count(&batch) == 0) {
+        status = writer.WriteBuffer();
+        if (status.ok()) {
+          status = writer.Frozen();
+        }
+        return status;
+      } else {
+        WriteBatchInternal::SetSequence(&batch, 0);
+        writer.AddRecord(WriteBatchInternal::Contents(&batch));
+      }
+    }
+    if (status.ok() && cfd->IsDropped()) {
+      status = Status::InvalidArgument("Column family has dropped!\n");
+    }
+    batch.Clear();
+  } while (status.ok());
+  return status;
+}
+
+// [begin_key, end_key)
+Status DBImpl::ImportRange(const ImportRangeOptions& options,
+                           ColumnFamilyHandle* column_family,
+                           const Slice& begin_key, const Slice& end_key,
+                           std::unique_ptr<SequentialFile>&& input_file) {
+  if (options.range_file_format != kRangeFileFormatWAL) {
+    return Status::NotSupported("ImportRange() only support 'wal'.");
+  }
+  if (options.mode != ImportRangeOptions::kSkipCheck) {
+    return Status::NotSupported(
+        "ImportRange() only support 'kSkipCheck'.");
+  }
+
+  Status status;
+  auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
+  auto cfd = cfh->cfd();
+  auto uc = cfd->user_comparator();
+
+  if (uc->Compare(begin_key, end_key) >= 0) {
+    return Status::InvalidArgument("Invalid range for begin_key/end_key.");
+  }
+
+  std::unique_ptr<SequentialFileReader> file_reader(
+      new SequentialFileReader(std::move(file), kRangeFileFormatWAL));
+
+  // Create the log reader.
+  struct LogReporter : public log::Reader::Reporter {
+    Status* status;
+    virtual void Corruption(size_t /*bytes*/, const Status& s) override {
+      if (status->ok()) {
+        *status = s;
+      }
+    }
+  };
+  struct BatchHandler : public WriteBatch::Handler {
+    DBImpl* self;
+    uint64_t entry_count;
+    WriteOptions write_options;
+
+    virtual Status PutCF(uint32_t column_family_id, const Slice& key,
+                         const Slice& value) {
+      if (column_family_id != 0) {
+        return Status::InvalidArgument("Unexpected wal file");
+      }
+      // TODO(zhaoming.274): write to sst ?
+      self->Put(write_options, key, value);
+
+      return Status::OK();
+    }
+
+    virtual Status DeleteCF(uint32_t column_family_id, const Slice& key) {
+      return Status::InvalidArgument("Unexpected wal file");
+    }
+
+    virtual Status SingleDeleteCF(uint32_t column_family_id, const Slice& key) {
+      return Status::InvalidArgument("Unexpected wal file");
+    }
+
+    virtual Status DeleteRangeCF(uint32_t /*column_family_id*/,
+                                 const Slice& /*begin_key*/,
+                                 const Slice& /*end_key*/) {
+      return Status::InvalidArgument("Unexpected wal file");
+    }
+
+    virtual Status MergeCF(uint32_t column_family_id, const Slice& key,
+                           const Slice& value) {
+      return Status::InvalidArgument("Unexpected wal file");
+    }
+  };
+
+  LogReporter reporter;
+  reporter.status = &status;
+  log::Reader reader(immutable_db_options_.info_log, std::move(file_reader),
+                     &reporter, true /*checksum*/, 1,
+                     false /* retry_after_eof */);
+
+  std::string scratch;
+  Slice record;
+  WriteBatch batch;
+
+  BatchHandler handler;
+  handler.self = this;
+  handler.entry_count = 0;
+  handler.write_options.disableWAL = true;
+
+  while (reader.ReadRecord(&record, &scratch,
+                           WALRecoveryMode::kAbsoluteConsistency) &&
+         status.ok()) {
+    if (record.size() < WriteBatchInternal::kHeader) {
+      return Status::Corruption("log record too small");
+    }
+    WriteBatchInternal::SetContents(&batch, record);
+
+    if (WriteBatchInternal::Sequence(&batch) != 0) {
+      return Status::Corruption("bad sequence number");
+    }
+
+    status = batch.Iterate(&handler);
+
+    if (!status.ok()) {
+      break;
+    }
+  }
+
+  if (handler.entry_count > 0) {
+    // ???
+  }
+
+  return status;
+}
+
 }  // namespace TERARKDB_NAMESPACE

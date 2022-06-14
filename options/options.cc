@@ -604,4 +604,6 @@ ReadOptions::ReadOptions(bool cksum, bool cache)
       aio_concurrency(32),
       iter_start_seqnum(0) {}
 
+const std::string kRangeFileFormatWAL = "wal";
+
 }  // namespace TERARKDB_NAMESPACE

@@ -374,6 +374,18 @@ class DBImpl : public DB {
   Status TraceIteratorSeekForPrev(const uint32_t& cf_id, const Slice& key);
 #endif  // ROCKSDB_LITE
 
+  // [begin_key, end_key)
+  Status ExportRange(const ExportRangeOptions& options,
+                     ColumnFamilyHandle* column_family, const Slice& begin_key,
+                     const Slice& end_key,
+                     std::unique_ptr<WritableFile>&& output_file) override;
+
+  // [begin_key, end_key)
+  Status ImportRange(const ImportRangeOptions& options,
+                     ColumnFamilyHandle* column_family, const Slice& begin_key,
+                     const Slice& end_key,
+                     std::unique_ptr<SequentialFile>&& input_file) override;
+
   // Similar to GetSnapshot(), but also lets the db know that this snapshot
   // will be used for transaction write-conflict checking.  The DB can then
   // make sure not to compact any keys that would prevent a write-conflict from
